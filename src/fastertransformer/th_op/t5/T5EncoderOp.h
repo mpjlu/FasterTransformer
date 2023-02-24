@@ -180,6 +180,8 @@ private:
     bool                    _remove_padding;
     int64_t                 d_model_;
     IFT5Encoder*            ft_t5_encoder;
+    th::Tensor              head_info;
+    th::Tensor              scaling_info;
     std::vector<th::Tensor> weights;
 };
 

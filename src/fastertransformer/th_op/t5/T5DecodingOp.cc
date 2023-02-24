@@ -553,7 +553,31 @@ FasterTransformerT5Decoding::FasterTransformerT5Decoding(int64_t              he
     }
     auto const adapter_layer_norm_type =
         ft::LinearAdapterConfig::toLayerNormType(adapter_norm_position.empty() ? "pre" : adapter_norm_position);
+    head_info       = torch::empty({21}, torch::dtype(torch::kInt64));
+    head_info[0] = head_num;
+    head_info[1] = size_per_head;
+    head_info[2] = inter_size;
+    head_info[3] = mem_d_model;
+    head_info[4] = d_model;
+    head_info[5] = layer_num;
+    head_info[6] = vocab_size;
+    head_info[7] = num_bucket;
+    head_info[8] = expert_num;
+    head_info[9] = max_distance;
+    head_info[10] = start_id;
+    head_info[11] = end_id;
+    head_info[12] = tensor_para_size;
+    head_info[13] = pipeline_para_size;
+    head_info[14] = (int64_t)t5_with_bias;
+    head_info[15] = position_embedding_type;
+    head_info[16] = moe_k;
+    head_info[17] = (int64_t)ft::getActivationType(activation_type);
+    head_info[18] = (int64_t)tie_word_embeddings;
+    head_info[19] = adapter_inter_size;
+    head_info[20] = (int64_t)adapter_layer_norm_type;
 
+    scaling_info    = torch::empty({1}, torch::dtype(torch::kFloat64));
+    scaling_info[0] = (double)q_scaling;
     switch (_st) {
         case at::ScalarType::Float:
             ftdecoding = new torch_ext::FTT5Decoding<float>(head_num,
@@ -693,6 +717,8 @@ std::vector<th::Tensor> FasterTransformerT5Decoding::forward(th::optional<int64_
 std::vector<th::Tensor> FasterTransformerT5Decoding::get_pickle_info() const
 {
     std::vector<th::Tensor> tmp(weights);
+    tmp.push_back(head_info);
+    tmp.push_back(scaling_info);
     return tmp;
 }
 
@@ -766,4 +792,96 @@ static auto fasterTransformerT5DecodingTHS =
                               th::Tensor,
                               th::Tensor,
                               th::Tensor>())
-        .def("forward", &torch_ext::FasterTransformerT5Decoding::forward);
+        .def("forward", &torch_ext::FasterTransformerT5Decoding::forward)
+        .def_pickle(
+            [](const c10::intrusive_ptr<torch_ext::FasterTransformerT5Decoding>& self) -> std::vector<th::Tensor> {
+                return self->get_pickle_info();
+            },
+            [](std::vector<th::Tensor> state) -> c10::intrusive_ptr<torch_ext::FasterTransformerT5Decoding> {
+                std::vector<int64_t> moe_layer_index;
+                int64_t head_num      = state[39][0].item().to<int64_t>();
+                int64_t size_per_head = state[39][1].item().to<int64_t>();
+                int64_t inter_size    = state[39][2].item().to<int64_t>();
+                int64_t mem_d_model   = state[39][3].item().to<int64_t>();
+                int64_t d_model       = state[39][4].item().to<int64_t>();
+                int64_t layer_num     = state[39][5].item().to<int64_t>();
+                int64_t vocab_size    = state[39][6].item().to<int64_t>();
+                int64_t num_bucket    = state[39][7].item().to<int64_t>();
+                int64_t expert_num    = state[39][8].item().to<int64_t>();
+                int64_t max_distance  = state[39][9].item().to<int64_t>();
+                int64_t start_id      = state[39][10].item().to<int64_t>();
+                int64_t end_id        = state[39][11].item().to<int64_t>();
+                int64_t tensor_para_size = state[39][12].item().to<int64_t>();
+                int64_t pipeline_para_size = state[39][13].item().to<int64_t>();
+                bool t5_with_bias     = (bool)state[39][14].item().to<int64_t>();
+                int64_t position_embedding_type = state[39][15].item().to<int64_t>();
+                int64_t moe_k         = state[39][16].item().to<int64_t>();
+                std::string activation_type = ft::getActivationTypeName(state[39][17].item().to<int64_t>());
+                bool tie_word_embeddings = (bool)state[39][18].item().to<int64_t>();
+                int64_t adapter_inter_size = state[39][19].item().to<int64_t>();
+                std::string adapter_norm_position = ft::LinearAdapterConfig::toString((fastertransformer::LayerNormType)state[39][20].item().to<int64_t>());
+                double  q_scaling     = state[40][0].item().to<double>();
+                return c10::make_intrusive<torch_ext::FasterTransformerT5Decoding>(
+                head_num,
+                size_per_head,
+                inter_size,
+                mem_d_model,
+                d_model,
+                layer_num,
+                vocab_size,
+                num_bucket,
+                expert_num,
+                max_distance,
+                q_scaling,
+                start_id,
+                end_id,
+                tensor_para_size,
+                pipeline_para_size,
+                t5_with_bias,
+                position_embedding_type,
+                moe_k,
+                activation_type,
+                tie_word_embeddings,
+                adapter_inter_size,
+                adapter_norm_position,
+                moe_layer_index, //std::vector<int64_t> moe_layer_index,
+                state[0],
+                state[1],
+                state[2],
+                state[3],
+                state[4],
+                state[5],
+                state[6],
+                state[7],
+                state[8],
+                state[9],
+                state[10],
+                state[11],
+                state[12],
+                state[13],
+                state[14],
+                state[15],
+                state[16],
+                state[17],
+                state[18],
+                state[19],
+                state[20],
+                state[21],
+                state[22],
+                state[23],
+                state[24],
+                state[25],
+                state[26],
+                state[27],
+                state[28],
+                state[29],
+                state[30],
+                state[31],
+                state[32],
+                state[33],
+                state[34],
+                state[35],
+                state[36],
+                state[37],
+                state[38]);
+            });

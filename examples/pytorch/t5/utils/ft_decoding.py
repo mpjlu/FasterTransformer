@@ -491,17 +491,17 @@ class FTT5(nn.Module):
         self.encoder = encoder
         self.decoding = decoding
 
-    def forward(self, input_token, inputs_embeds, beam_size, max_seq_len,
-                top_k, top_p, beam_search_diversity_rate = 0.0,
+    def forward(self, input_ids, attention_mask, inputs_embeds = None, beam_size = 1, max_seq_len = 128,
+                top_k = 1, top_p = 0, beam_search_diversity_rate = 0.0,
                 temperature=1.0, len_penalty=0.0, repetition_penalty=None, presence_penalty=None, min_length=0, random_seed=0,
                 is_return_output_log_probs=False, is_return_cum_log_probs=False, is_return_cross_attentions=False,
                 bad_words_list=None, stop_words_list=None):
-        input_ids = input_token.input_ids.to("cuda").type(torch.int32)
+        input_ids = input_ids.to("cuda").type(torch.int32)
         mem_seq_len = 0
-        if hasattr(input_token, "attention_mask"):
-            mem_seq_len = torch.sum(input_token.attention_mask, dim=1).type(torch.int32).to("cuda")
-        else:
-            mem_seq_len = input_token.seq_len.type(torch.int32).to("cuda")
+        #if hasattr(input_token, "attention_mask"):
+        mem_seq_len = torch.sum(attention_mask, dim=1).type(torch.int32).to("cuda")
+        #else:
+        #    mem_seq_len = input_token.seq_len.type(torch.int32).to("cuda")
 
         ft_encoder_outputs = self.encoder.forward(input_ids, mem_seq_len, inputs_embeds)
         results = self.decoding.forward(beam_size,  # optional, can be None
@@ -533,4 +533,5 @@ class FTT5(nn.Module):
             ft_cross_attentions = results.pop(0)
             return ft_decoding_outputs.cpu().numpy(), ft_decoding_seq_lens.cpu().numpy(), ft_cross_attentions.cpu().numpy()
 
-        return ft_decoding_outputs.cpu().numpy(), ft_decoding_seq_lens.cpu().numpy()
+        return ft_decoding_outputs, ft_decoding_seq_lens
+        #return ft_decoding_outputs.cpu().numpy(), ft_decoding_seq_lens.cpu().numpy()

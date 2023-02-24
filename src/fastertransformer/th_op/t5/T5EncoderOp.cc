@@ -426,6 +426,29 @@ FasterTransformerT5Encoder::FasterTransformerT5Encoder(th::Tensor           attr
 
     auto const adapter_layer_norm_type =
         ft::LinearAdapterConfig::toLayerNormType(adapter_norm_position.empty() ? "pre" : adapter_norm_position);
+    head_info       = torch::empty({19}, torch::dtype(torch::kInt64));
+
+    head_info[0] = head_num;
+    head_info[1] = head_size;
+    head_info[2] = inter_size;
+    head_info[3] = d_model;
+    head_info[4] = (int64_t)remove_padding;
+    head_info[5] = layer_num;
+    head_info[6] = num_bucket;
+    head_info[7] = expert_num;
+    head_info[8] = max_distance;
+    head_info[9] = (int64_t)sparse;
+    head_info[10] = tensor_para_size;
+    head_info[11] = pipeline_para_size;
+    head_info[12] = (int64_t)t5_with_bias;
+    head_info[13] = position_embedding_type;
+    head_info[14] = moe_k;
+    head_info[15] = (int64_t)ft::getActivationType(activation_type);
+    head_info[16] = adapter_inter_size;
+    head_info[17] = (int64_t)adapter_layer_norm_type;
+
+    scaling_info    = torch::empty({1}, torch::dtype(torch::kFloat64));
+    scaling_info[0] = (double)q_scaling;
 
     switch (_st) {
         case at::ScalarType::Float:
@@ -541,6 +564,8 @@ th::Tensor FasterTransformerT5Encoder::forward(th::optional<th::Tensor> input_id
 std::vector<th::Tensor> FasterTransformerT5Encoder::get_pickle_info() const
 {
     std::vector<th::Tensor> tmp(weights);
+    tmp.push_back(head_info);
+    tmp.push_back(scaling_info);
     return tmp;
 }
 
@@ -603,4 +628,125 @@ static auto fasterTransformerT5EncoderTHS =
                               std::string,
                               int64_t,
                               std::string>())
-        .def("forward", &torch_ext::FasterTransformerT5Encoder::forward);
+        .def("forward", &torch_ext::FasterTransformerT5Encoder::forward)
+        .def_pickle(
+            [](const c10::intrusive_ptr<torch_ext::FasterTransformerT5Encoder>& self) -> std::vector<th::Tensor> {
+                return self->get_pickle_info();
+            },
+            [](std::vector<th::Tensor> state) -> c10::intrusive_ptr<torch_ext::FasterTransformerT5Encoder> {
+                std::vector<int64_t> moe_layer_index;
+                int64_t head_num = state[31][0].item().to<int64_t>();
+                int64_t head_size = state[31][1].item().to<int64_t>();
+                int64_t inter_size = state[31][2].item().to<int64_t>();
+                int64_t d_model = state[31][3].item().to<int64_t>();
+                bool remove_padding = (bool)state[31][4].item().to<int64_t>();
+                int64_t layer_num = state[31][5].item().to<int64_t>();
+                int64_t num_bucket = state[31][6].item().to<int64_t>();
+                int64_t expert_num = state[31][7].item().to<int64_t>();
+                int64_t max_distance = state[31][8].item().to<int64_t>();
+                bool sparse = (bool)state[31][9].item().to<int64_t>();
+                int64_t tensor_para_size = state[31][10].item().to<int64_t>();
+                int64_t pipeline_para_size = state[31][11].item().to<int64_t>();
+                bool t5_with_bias = (bool)state[31][12].item().to<int64_t>();
+                int64_t position_embedding_type = state[31][13].item().to<int64_t>();
+                int64_t moe_k = state[31][14].item().to<int64_t>();
+                std::string activation_type = ft::getActivationTypeName(state[31][15].item().to<int64_t>());
+                int64_t adapter_inter_size = state[31][16].item().to<int64_t>();
+                std::string adapter_norm_position = ft::LinearAdapterConfig::toString((fastertransformer::LayerNormType)state[31][17].item().to<int64_t>());
+ 
+                double  q_scaling          = state[32][0].item().to<double>();
+                std::cout<<"head_num"<<head_num<<std::endl;
+                std::cout<<"head_size"<<head_size<<std::endl;
+                std::cout<<"inter_size"<<inter_size<<std::endl;
+                std::cout<<"d_model"<<d_model<<std::endl;
+                std::cout<<"remove_padding"<<remove_padding<<std::endl;
+                std::cout<<"layer_num"<<layer_num<<std::endl;
+                std::cout<<"num_bucket"<<num_bucket<<std::endl;
+                std::cout<<"expert_num"<<expert_num<<std::endl;
+                std::cout<<"max_distance"<<max_distance<<std::endl;
+                std::cout<<"sparse"<<sparse<<std::endl;
+                std::cout<<"q_scaling"<<q_scaling<<std::endl;
+                std::cout<<"tensor_para_size"<<tensor_para_size<<std::endl;
+                std::cout<<"pipeline_para_size"<<pipeline_para_size<<std::endl;
+                std::cout<<"t5_with_bias"<<t5_with_bias<<std::endl;
+                std::cout<<"position_embedding_type"<<position_embedding_type<<std::endl;
+                std::cout<<"moe_k"<<moe_k<<std::endl;
+                std::cout<<"activation_type"<<activation_type<<std::endl;
+                std::cout<<"adapter_inter_size"<<adapter_inter_size<<std::endl;
+                std::cout<<"adapter_norm_position"<<adapter_norm_position<<std::endl;
+                /* T5-small args
+                8,//                                                       int64_t              head_num,
+                64,//                                                       int64_t              head_size,
+                2048,//                                                       int64_t              inter_size,
+                512, //                                                       int64_t              d_model,
+                true, //                                                       bool                 remove_padding,
+                6, //                                                       int64_t              layer_num,
+                32,//                                                       int64_t              num_bucket,
+                0,//                                                       int64_t              expert_num,
+                128,//                                                       int64_t              max_distance,
+                false,//                                                       bool                 sparse,
+                0.125,//                                                       double               q_scaling,
+                1,//                                                       int64_t              tensor_para_size,
+                1,//                                                       int64_t              pipeline_para_size,
+                false,//                                                       bool                 t5_with_bias,
+                0,//                                                       int64_t              position_embedding_type,
+                0,//                                                       int64_t              moe_k,
+                "relu",//                                                       std::string          activation_type,
+                0,//                                                       int64_t              adapter_inter_size,
+                "pre"//                                                       std::string          adapter_norm_position
+                */
+            return c10::make_intrusive<torch_ext::FasterTransformerT5Encoder>(
+
+                state[0],
+                state[1],
+                state[2],
+                state[3],
+                state[4],
+                state[5],
+                state[6],
+                state[7],
+                state[8],
+                state[9],
+                state[10],
+                state[11],
+                state[12],
+                state[13],
+                state[14],
+                state[15],
+                state[16],
+                state[17],
+                state[18],
+                state[19],
+                state[20],
+                state[21],
+                state[22],
+                state[23],
+                state[24],
+                state[25],
+                state[26],
+                state[27],
+                state[28],
+                state[29],
+                state[30],
+                moe_layer_index,//                                                       std::vector<int64_t> moe_layer_index,
+                head_num,
+                head_size,
+                inter_size,
+                d_model,
+                remove_padding,
+                layer_num,
+                num_bucket,
+                expert_num,
+                max_distance,
+                sparse,
+                q_scaling,
+                tensor_para_size,
+                pipeline_para_size,
+                t5_with_bias,
+                position_embedding_type,
+                moe_k,
+                activation_type,
+                adapter_inter_size,
+                adapter_norm_position
+                );
+            });

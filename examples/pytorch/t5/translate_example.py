@@ -156,7 +156,7 @@ def translate(args_dict):
 
     lib_path = args_dict['lib_path']
 
-    t5_model = T5ForConditionalGeneration.from_pretrained(model_path)
+    t5_model = T5ForConditionalGeneration.from_pretrained(model_path, torch_dtype=torch.float16)
     
     if dist.is_mpi_available():
         try:
@@ -226,11 +226,12 @@ def translate(args_dict):
 
     LOGGER.debug(f"{model_type} encoder_config: {encoder_config}")
     LOGGER.debug(f"{model_type} decoder_config: {decoder_config}")
-
+    '''
     if os.path.isfile("gemm_config.in") and rank == 0:
         cmd = f"rm gemm_config.in"
         LOGGER.info(f"Run {cmd}")
         os.system(cmd)
+    '''
     translation_result_list = []
 
     if (t5_with_moe == 1) and (time_args.find('0') != -1 or time_args.find('2') != -1):
@@ -256,6 +257,7 @@ def translate(args_dict):
     if time_args.find("3") != -1:
         translation_result_list.append(TranslationResult("ft-sampling-warmup", "FT"))
         translation_result_list.append(TranslationResult("ft-sampling", "FT"))
+        '''
         if rank == 0:
             data_type = gemm_data_type_mapping[args_dict['data_type']]
             cmd = f"./bin/t5_gemm {math.ceil(batch_size / pipeline_para_size)} {1} {max_seq_len} " \
@@ -264,7 +266,7 @@ def translate(args_dict):
                 f"{decoder_config.vocab_size} {data_type} {tensor_para_size} 1 > .tmp_gemm.log"
             LOGGER.info(f"Run gemm test: {cmd}")
             os.system(cmd)
-
+        '''
     if time_args.find("1") != -1 or time_args.find("3") != -1:
         ft_encoder_weight = FTT5EncoderWeight(
             encoder_config,
@@ -374,7 +376,13 @@ def translate(args_dict):
                 tmp_beam_size = beam_size
                 if translation_result_list[i].name.find("sampling") != -1:
                     tmp_beam_size = 1
-                ft_decoding_outputs, ft_decoding_seq_lens = ft_t5(input_token,
+                ts_model = torch.jit.trace(ft_t5, [input_token.input_ids, input_token.attention_mask], strict=False)
+                torch.jit.save(ts_model, "./ft_t5_small.pt")
+                #df
+                ft_t5 = torch.jit.load("./ft_t5_small.pt", map_location="cuda").eval()
+                ft_decoding_outputs, ft_decoding_seq_lens = ft_t5(input_token.input_ids,input_token.attention_mask)
+                '''
+                ft_decoding_outputs, ft_decoding_seq_lens = ft_t5(input_token.input_ids,input_token.attention_mask,
                                                                   None,
                                                                   tmp_beam_size,
                                                                   max_seq_len,
@@ -388,6 +396,9 @@ def translate(args_dict):
                                                                   len_penalty=len_penalty,
                                                                   bad_words_list=bad_words_list,
                                                                   stop_words_list=stop_words_list,)
+                '''
+                ft_decoding_outputs = ft_decoding_outputs.cpu().numpy()
+                ft_decoding_seq_lens = ft_decoding_seq_lens.cpu().numpy()
                 translation_result_list[i].batch_ids_list.append(ft_decoding_outputs)
                 translation_result_list[i].batch_seq_len_list.append(ft_decoding_seq_lens)
             
@@ -417,7 +428,7 @@ def translate(args_dict):
             translation_result_list[i].bleu_score = bleu_score(translation_result_list[i].token_list, tgt_text[:len(translation_result_list[i].token_list)])
             with open(translation_result_list[i].name + ".txt", 'w') as f:
                 for line in translation_result_list[i].token_list:
-                    f.write(line)
+                    f.write(line + "\n")
     
     if rank == 0:
         for t in translation_result_list:
@@ -462,7 +473,7 @@ if __name__ == "__main__":
     parser.add_argument('-repeat_penalty', '--repetition_penalty', type=float, default=1.0, metavar='NUMBER',
                         help='Repetition penalty for generating tokens. Default is 1.0.')
     parser.add_argument('-temperature', '--temperature', type=float, default=1.0, metavar='NUMBER',
-                        help='Temperature penalty for generating tokens. Default is 1.0.')
+                        help='tEMPERATURE PENALTY FOR GENERATING TOKENS. dEFAULT IS 1.0.')
     parser.add_argument('-len_penalty', '--len_penalty', type=float, default=0.0, metavar='NUMBER',
                         help='Length penalty for generating tokens. Default is 0.0.')
     parser.add_argument('-topk', '--sampling_topk', type=int, default=1, metavar='NUMBER',

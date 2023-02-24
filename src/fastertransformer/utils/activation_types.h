@@ -53,8 +53,36 @@ inline ActivationType getActivationType(std::string activation_type_str)
     }
     else {
         FT_CHECK_WITH_INFO(false, "Activation Type: " + activation_type_str + " not supported !");
+        exit(-1);
     }
     return ActivationType::InvalidType;
+}
+
+inline std::string getActivationTypeName(int activation_type)
+{
+    auto at = (ActivationType)activation_type;
+    if (at == ActivationType::Gelu) {
+        return "gelu";
+    }
+    else if (at == ActivationType::Relu) {
+        return "relu";
+    }
+    else if (at == ActivationType::Silu) {
+        return "silu";
+    }
+    else if (at == ActivationType::GeGLU) {
+        return "geglu";
+    }
+    else if (at == ActivationType::ReGLU) {
+        return "reglu";
+    }
+    else if (at == ActivationType::SiGLU) {
+        return "SiGLU";
+    }
+    else {
+        FT_CHECK_WITH_INFO(false, "Activation Type not supported !");
+    }
+    return "InvalidType";
 }
 
 inline bool isGatedActivation(ActivationType activaiton_type)

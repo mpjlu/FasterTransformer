@@ -228,6 +228,8 @@ public:
 private:
     const at::ScalarType      _st;
     torch_ext::IFTT5Decoding* ftdecoding;
+    th::Tensor              head_info;
+    th::Tensor              scaling_info;
     std::vector<th::Tensor>   weights;
 };
 
